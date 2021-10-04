@@ -79,7 +79,7 @@ void my_homekit_loop() {
 }
 
 void setup() {
-  delay(2000); // for recovery
+  // delay(2000); // for recovery
 
   Serial.begin(9600);
 
@@ -140,6 +140,6 @@ void loop() {
   pride();
   // FastLED.delay(10);
   my_homekit_loop();
+  delay(10);
   FastLED.show();
-  // delay(5);
 }
