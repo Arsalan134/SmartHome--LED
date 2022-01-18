@@ -6,21 +6,14 @@
 #include <FastLED.h>
 #include <arduino_homekit_server.h>
 
-#if FASTLED_VERSION < 3001000
-#error "Requires FastLED 3.1 or later; check github for latest code."
-#endif
-
 #define DATA_PIN D3
 #define LED_TYPE WS2811
 #define COLOR_ORDER BRG
-#define NUM_LEDS 67
+#define NUM_LEDS 66
 
 #define LOG_D(fmt, ...) printf_P(PSTR(fmt "\n"), ##__VA_ARGS__);
 
 CRGB leds[NUM_LEDS];
-
-bool is_on = false;
-float current_brightness = 100.0;
 
 // access your HomeKit characteristics defined in my_accessory.c
 extern "C" homekit_server_config_t accessory_config;
@@ -29,34 +22,45 @@ extern "C" homekit_characteristic_t cha_bright;
 
 static uint32_t next_heap_millis = 0;
 
-void updateColor() {
-  if (is_on) {
-    int b = map(current_brightness, 0, 100, 0, 255);
-    Serial.println(b);
-    FastLED.setBrightness(b);
-  } else if (!is_on) {
-    Serial.println("is_on == false");
-    FastLED.setBrightness(0);
-    fill_solid(leds, NUM_LEDS, CRGB::Black);
-  }
+void setBrightness(int newBrightness) {
+  int delayTime = 20;
+
+  Serial.println(newBrightness);
+
+  FastLED.setBrightness(map(newBrightness, 0, 100, 0, 255));
+  FastLED.delay(delayTime);
+}
+
+void smoothBrightness(int from, int to) {
+  if (to > from)
+    for (int newBrightness = from; newBrightness <= to; newBrightness++)
+      setBrightness(newBrightness);
+  else
+    for (int newBrightness = from; newBrightness >= to; newBrightness--)
+      setBrightness(newBrightness);
 }
 
 void set_on(const homekit_value_t v) {
-  bool on = v.bool_value;
-  cha_on.value.bool_value = on; // sync the value
-  is_on = true ? on : false;
+  int oldOnValue = cha_on.value.bool_value;
+  cha_on.value.bool_value = v.bool_value; // sync the value
 
-  updateColor();
+  if (oldOnValue != cha_on.value.bool_value) {
+    if (cha_on.value.bool_value)
+      smoothBrightness(0, cha_bright.value.int_value);
+    else
+      smoothBrightness(cha_bright.value.int_value, 0);
+  }
 }
 
 void set_bright(const homekit_value_t v) {
+  int newBrightness = v.int_value;
+
   Serial.println("set_bright");
-  int bright = v.int_value;
-  cha_bright.value.int_value = bright; // sync the value
+  Serial.println(newBrightness);
 
-  current_brightness = bright;
+  cha_bright.value.int_value = newBrightness; // sync the value
 
-  updateColor();
+  FastLED.setBrightness(map(newBrightness, 0, 100, 0, 255));
 }
 
 void my_homekit_setup() {
@@ -79,7 +83,7 @@ void my_homekit_loop() {
 }
 
 void setup() {
-  // delay(2000); // for recovery
+  delay(2000); // for recovery
 
   Serial.begin(9600);
 
@@ -89,14 +93,14 @@ void setup() {
 
   FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS)
       .setCorrection(TypicalLEDStrip)
-      .setDither(current_brightness < 255);
+      // .setDither();
 
-  FastLED.setBrightness(current_brightness);
+      FastLED.setBrightness(cha_bright.value.int_value);
 }
 
 // This function draws rainbows with an ever-changing,
 // widely-varying set of parameters.
-void pride() {
+void rainbow() {
   static uint16_t sPseudotime = 0;
   static uint16_t sLastMillis = 0;
   static uint16_t sHue16 = 0;
@@ -137,9 +141,13 @@ void pride() {
 }
 
 void loop() {
-  pride();
-  // FastLED.delay(10);
+  rainbow();
+
   my_homekit_loop();
+
   delay(10);
+
   FastLED.show();
+
+  FastLED.delay(10);
 }
