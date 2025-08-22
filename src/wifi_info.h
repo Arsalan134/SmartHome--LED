@@ -15,7 +15,7 @@
 #endif
 
 const char *ssid = "AF";
-const char *password = "Azerbaijan13456789";
+const char *password = "***";
 
 void wifi_connect() {
   WiFi.persistent(false);
